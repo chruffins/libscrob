@@ -20,6 +20,14 @@
  *
  *  3. This notice may not be removed or altered from any source distribution.
  */
+
+/**
+ * Modifications 2026 - chruffins
+ *
+ * Changes:
+ * - added fix to ignore comments and prolog (lol)
+ * - added 0-terminated string copy to buffer helper
+ */
 #ifndef HEADER_XML
 #define HEADER_XML
 
@@ -187,6 +195,14 @@ size_t xml_string_length(struct xml_string* string);
  * @warning Will write at most length bytes, even if the string is longer
  */
 void xml_string_copy(struct xml_string* string, uint8_t* buffer, size_t length);
+
+/**
+ * Copies the string into the supplied buffer and always 0-terminates
+ *
+ * @warning Requires length > 0 to write a terminator
+ * @warning Will write at most length - 1 bytes of string data
+ */
+void xml_string_copy_terminated(struct xml_string* string, uint8_t* buffer, size_t length);
 
 #ifdef __cplusplus
 }

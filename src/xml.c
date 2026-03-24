@@ -20,6 +20,14 @@
  *
  *  3. This notice may not be removed or altered from any source distribution.
  */
+
+ /**
+ * Modifications 2026 - chruffins
+ *
+ * Changes:
+ * - added fix to ignore comments and prolog (lol)
+ * - added 0-terminated string copy to buffer helper
+ */
 #include "xml.h"
 
 #ifdef XML_PARSER_VERBOSE
@@ -436,6 +444,128 @@ static void xml_skip_whitespace(struct xml_parser* parser) {
 /**
  * [PRIVATE]
  *
+ * @return true iff parser buffer at current position starts with needle
+ */
+static bool xml_parser_starts_with(struct xml_parser* parser, const char* needle) {
+	size_t needle_length = strlen(needle);
+
+	if (parser->position + needle_length > parser->length) {
+		return false;
+	}
+
+	return 0 == memcmp(&parser->buffer[parser->position], needle, needle_length);
+}
+
+
+
+/**
+ * [PRIVATE]
+ *
+ * Skips a processing instruction of shape <? ... ?>
+ *
+ * @return 1 if skipped, 0 if not at PI, -1 on unterminated PI
+ */
+static int xml_skip_processing_instruction(struct xml_parser* parser) {
+	xml_parser_info(parser, "processing_instruction");
+
+	if (!xml_parser_starts_with(parser, "<?")) {
+		return 0;
+	}
+
+	size_t position = parser->position + 2;
+	while (position + 1 < parser->length) {
+		if ('?' == parser->buffer[position] && '>' == parser->buffer[position + 1]) {
+			parser->position = position + 2;
+			if (parser->position >= parser->length) {
+				parser->position = parser->length - 1;
+			}
+			return 1;
+		}
+
+		position++;
+	}
+
+	xml_parser_error(parser, NO_CHARACTER, "xml_skip_processing_instruction::unterminated processing instruction");
+	return -1;
+}
+
+
+
+/**
+ * [PRIVATE]
+ *
+ * Skips an XML comment of shape <!-- ... -->
+ *
+ * @return 1 if skipped, 0 if not at comment, -1 on unterminated comment
+ */
+static int xml_skip_comment(struct xml_parser* parser) {
+	xml_parser_info(parser, "comment");
+
+	if (!xml_parser_starts_with(parser, "<!--")) {
+		return 0;
+	}
+
+	size_t position = parser->position + 4;
+	while (position + 2 < parser->length) {
+		if ('-' == parser->buffer[position]
+			&& '-' == parser->buffer[position + 1]
+			&& '>' == parser->buffer[position + 2]) {
+
+			parser->position = position + 3;
+			if (parser->position >= parser->length) {
+				parser->position = parser->length - 1;
+			}
+			return 1;
+		}
+
+		position++;
+	}
+
+	xml_parser_error(parser, NO_CHARACTER, "xml_skip_comment::unterminated comment");
+	return -1;
+}
+
+
+
+/**
+ * [PRIVATE]
+ *
+ * Skips XML misc nodes currently supported by this parser: processing
+ * instructions and comments.
+ *
+ * @return true on success, false on malformed markup
+ */
+static bool xml_skip_misc(struct xml_parser* parser) {
+	while (true) {
+		xml_skip_whitespace(parser);
+
+		int processing_instruction = xml_skip_processing_instruction(parser);
+		if (processing_instruction < 0) {
+			return false;
+		}
+		if (processing_instruction > 0) {
+			continue;
+		}
+
+		int comment = xml_skip_comment(parser);
+		if (comment < 0) {
+			return false;
+		}
+		if (comment > 0) {
+			continue;
+		}
+
+		break;
+	}
+
+	return true;
+}
+
+
+
+/**
+ * [PRIVATE]
+ *
  * Finds and creates all attributes on the given node.
  *
  * @author Blake Felt
@@ -741,26 +871,36 @@ static struct xml_node* xml_parse_node(struct xml_parser* parser) {
 
 	/* Otherwise children are to be expected
 	 */
-	} else while ('/' != xml_parser_peek(parser, NEXT_CHARACTER)) {
+	} else {
+		while (true) {
+			if (!xml_skip_misc(parser)) {
+				xml_parser_error(parser, NO_CHARACTER, "xml_parse_node::misc");
+				goto exit_failure;
+			}
 
-		/* Parse child node
-		 */
-		struct xml_node* child = xml_parse_node(parser);
-		if (!child) {
-			xml_parser_error(parser, NEXT_CHARACTER, "xml_parse_node::child");
-			goto exit_failure;
+			if ('/' == xml_parser_peek(parser, NEXT_CHARACTER)) {
+				break;
+			}
+
+			/* Parse child node
+			 */
+			struct xml_node* child = xml_parse_node(parser);
+			if (!child) {
+				xml_parser_error(parser, NEXT_CHARACTER, "xml_parse_node::child");
+				goto exit_failure;
+			}
+
+			/* Grow child array :)
+			 */
+			size_t old_elements = get_zero_terminated_array_nodes(children);
+			size_t new_elements = old_elements + 1;
+			children = realloc(children, (new_elements + 1) * sizeof(struct xml_node*));
+
+			/* Save child
+			 */
+			children[new_elements - 1] = child;
+			children[new_elements] = 0;
 		}
-
-		/* Grow child array :)
-		 */
-		size_t old_elements = get_zero_terminated_array_nodes(children);
-		size_t new_elements = old_elements + 1;
-		children = realloc(children, (new_elements + 1) * sizeof(struct xml_node*));
-
-		/* Save child
-		 */
-		children[new_elements - 1] = child;
-		children[new_elements] = 0;
 	}
 
 
@@ -838,6 +978,11 @@ struct xml_document* xml_parse_document(uint8_t* buffer, size_t length) {
 	 */
 	if (!length) {
 		xml_parser_error(&parser, NO_CHARACTER, "xml_parse_document::length equals zero");
+		return 0;
+	}
+
+	if (!xml_skip_misc(&parser)) {
+		xml_parser_error(&parser, NO_CHARACTER, "xml_parse_document::misc");
 		return 0;
 	}
 
@@ -1125,5 +1270,26 @@ void xml_string_copy(struct xml_string* string, uint8_t* buffer, size_t length) 
 	#undef min
 
 	memcpy(buffer, string->buffer, length);
+}
+
+/**
+ * [PUBLIC API]
+ */
+void xml_string_copy_terminated(struct xml_string* string, uint8_t* buffer, size_t length) {
+	if (!buffer || length == 0) {
+		return;
+	}
+
+	if (!string) {
+		buffer[0] = 0;
+		return;
+	}
+
+	#define min(X,Y) ((X) < (Y) ? (X) : (Y))
+	size_t content_length = min(length - 1, string->length);
+	#undef min
+
+	memcpy(buffer, string->buffer, content_length);
+	buffer[content_length] = 0;
 }
 
