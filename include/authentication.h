@@ -1,6 +1,8 @@
 #ifndef SCROB_AUTH_H
 #define SCROB_AUTH_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

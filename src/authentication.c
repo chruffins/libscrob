@@ -18,23 +18,31 @@ static int scrob_compare_param_pairs(const void *a, const void *b) {
 }
 
 const char *scrob_create_api_signature_for_get_token(const char *api_key) {
-    char* api_sig = (char *)malloc(17); // 16 bytes + null terminator
-    if (!api_sig) {
+    char* hex_sig = (char *)malloc(33);
+    if (!hex_sig) {
         return NULL;
     }
 
     char buffer[64] = {0};
     int len = snprintf(buffer, sizeof(buffer), "api_key%s", api_key);
     if (len < 0 || (size_t)len >= sizeof(buffer)) {
-        free(api_sig);
+        free(hex_sig);
         return NULL;
     }
 
+    printf("string to hash: %s\n", buffer); // debug print
+
+    uint8_t binary_digest[16];
     scrob_md5_ctx ctx;
     scrob_md5_init(&ctx);
     scrob_md5_update(&ctx, (const uint8_t *)buffer, len);
-    scrob_md5_final((uint8_t *)api_sig, &ctx);
-    return api_sig;
+    scrob_md5_final(binary_digest, &ctx);
+
+    for (int i = 0; i < 16; i++) {
+        snprintf(&hex_sig[i * 2], 3, "%02x", binary_digest[i]);
+    }
+
+    return hex_sig;
 }
 
 const char *scrob_create_api_signature(const char **param_names, const char **param_values, size_t num_params) {
@@ -42,7 +50,7 @@ const char *scrob_create_api_signature(const char **param_names, const char **pa
         return NULL;
     }
 
-    char *api_sig = (char *)malloc(17); // 16 bytes + null terminator
+    char *api_sig = (char *)malloc(33);
     if (!api_sig) {
         return NULL;
     }
@@ -85,11 +93,15 @@ const char *scrob_create_api_signature(const char **param_names, const char **pa
     }
     buffer[offset] = '\0';
 
+    uint8_t binary_digest[16];
     scrob_md5_ctx ctx;
     scrob_md5_init(&ctx);
     scrob_md5_update(&ctx, (const uint8_t *)buffer, offset);
-    scrob_md5_final((uint8_t *)api_sig, &ctx);
-    api_sig[16] = '\0';
+    scrob_md5_final(binary_digest, &ctx);
+
+    for (int i = 0; i < 16; i++) {
+        snprintf(&api_sig[i * 2], 3, "%02x", binary_digest[i]);
+    }
 
     free(buffer);
     free(pairs);
