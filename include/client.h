@@ -15,7 +15,9 @@ scrob_client* scrob_create_client(void);
 void scrob_destroy_client(scrob_client* client);
 
 bool scrob_set_client_api_key(scrob_client* client, const char* api_key);
-void scrob_get_client_token(scrob_client* client);
+
+// returns 0 on success, non-zero on failure
+int scrob_get_client_token(scrob_client* client);
 
 
 #ifdef __cplusplus
