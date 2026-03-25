@@ -25,6 +25,16 @@ const char* read_shared_secret() {
     return shared_secret;
 }
 
+const char* read_session_key() {
+    char *session_key = getenv("LASTFM_SESSION_KEY");
+    if (!session_key) {
+        fprintf(stderr, "LASTFM_SESSION_KEY environment variable not set\n");
+        exit(1);
+    }
+
+    return session_key;
+}
+
 void wait_for_enter(void) {
     printf("Press Enter to continue...");
     fflush(stdout);
@@ -51,6 +61,7 @@ int main(int argc, char **argv) {
     // step 1: (implicit) get yer own API key
     const char* api_key = read_api_key();
     const char* shared_secret = read_shared_secret();
+    const char* session_key = read_session_key();
 
     // step 2: get token
     if (!scrob_set_client_api_key(client, api_key)) {
@@ -63,6 +74,11 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to set shared secret\n");
         scrob_destroy_client(client);
         return 1;
+    }
+
+    if (scrob_set_client_session_key(client, session_key)) {
+        printf("Session key already set, skipping authentication flow\n");
+        goto got_session_key;
     }
 
     scrob_get_client_token(client); // This will print the request URL for debugging
@@ -83,9 +99,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to get authentication URL\n");
     }
 
-
     // step 4: fetch session key
     scrob_get_session_key(client); // This will print the response for debugging
+
+got_session_key:
 
     // Additional client operations would go here
 

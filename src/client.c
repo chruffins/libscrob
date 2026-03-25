@@ -201,6 +201,16 @@ bool scrob_set_client_shared_secret(scrob_client *client, const char *shared_sec
     return true;
 }
 
+bool scrob_set_client_session_key(scrob_client *client, const char *session_key) {
+    if (!client || !session_key || strlen(session_key) != 32) {
+        return false;
+    }
+    strncpy(client->session_key_buffer, session_key, sizeof(client->session_key_buffer) - 1);
+    client->session_key_buffer[sizeof(client->session_key_buffer) - 1] = 0;
+    client->is_authenticated = true; // assumes this is true anyways
+    return true;
+}
+
 int scrob_get_client_token(scrob_client* client) {
     int retcode = 1; // default to failure
     if (strlen(client->api_key) == 0) {
@@ -374,6 +384,7 @@ int scrob_get_session_key(scrob_client *client) {
         if (strcmp(buffer, "key") == 0) {
             xml_string_copy_terminated(xml_node_content(child), (uint8_t *)client->session_key_buffer, sizeof(client->session_key_buffer));
             printf("Received session key: %s\n", client->session_key_buffer);
+            client->is_authenticated = true;
             retcode = 0;
             break;
         }
