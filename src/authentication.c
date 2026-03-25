@@ -45,8 +45,8 @@ const char *scrob_create_api_signature_for_get_token(const char *api_key) {
     return hex_sig;
 }
 
-const char *scrob_create_api_signature(const char **param_names, const char **param_values, size_t num_params) {
-    if (!param_names || !param_values || num_params == 0) {
+const char *scrob_create_api_signature(const char **param_names, const char **param_values, size_t num_params, const char *shared_secret) {
+    if (!param_names || !param_values || num_params == 0 || !shared_secret) {
         return NULL;
     }
 
@@ -75,7 +75,8 @@ const char *scrob_create_api_signature(const char **param_names, const char **pa
 
     qsort(pairs, num_params, sizeof(scrob_param_pair), scrob_compare_param_pairs);
 
-    char *buffer = (char *)malloc(total_len + 1);
+    size_t secret_len = strlen(shared_secret);
+    char *buffer = (char *)malloc(total_len + secret_len + 1);
     if (!buffer) {
         free(pairs);
         return NULL;
@@ -91,7 +92,11 @@ const char *scrob_create_api_signature(const char **param_names, const char **pa
         memcpy(buffer + offset, pairs[i].value, value_len);
         offset += value_len;
     }
+    memcpy(buffer + offset, shared_secret, secret_len);
+    offset += secret_len;
     buffer[offset] = '\0';
+
+    printf("string to hash: %s\n", buffer); // debug print
 
     uint8_t binary_digest[16];
     scrob_md5_ctx ctx;

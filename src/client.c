@@ -330,7 +330,59 @@ int scrob_get_session_key(scrob_client *client) {
         printf("%s", response.data);
     }
 
-    return 0;
+    // *dont* need these resources anymore
+    free((char*)api_sig);
+    free((char*)request_url);
+    curl_easy_cleanup(curl);
+
+    doc = xml_parse_document((uint8_t *)response.data, response.length);
+    if (!doc) {
+        fprintf(stderr, "Failed to parse XML response\n");
+        return retcode;
+    }
+
+    struct xml_node *root = xml_document_root(doc);
+    int error_code = scrob_get_error_code_from_response(root);
+    if (error_code) {
+        fprintf(stderr, "API error code: %d\n", error_code);
+        retcode = error_code;
+        goto xml_cleanup;
+    } else {
+        printf("Session key request successful\n");
+    }
+
+    // root should only have one child: session
+    struct xml_node *session_node = xml_node_child(root, 0);
+    if (!session_node) {
+        fprintf(stderr, "Unexpected response format: no child nodes\n");
+        goto xml_cleanup;
+    }
+
+    // validate name
+    xml_string_copy_terminated(xml_node_name(session_node), (uint8_t *)buffer, sizeof(buffer));
+    if (strcmp(buffer, "session") != 0) {
+        fprintf(stderr, "Unexpected response format: expected 'session' node, got '%s'\n", buffer);
+        goto xml_cleanup;
+    }
+
+    // session node should have two children: name and key
+    int session_child_count = xml_node_children(session_node);
+    for (int i = 0; i < session_child_count; i++) {
+        struct xml_node *child = xml_node_child(session_node, i);
+
+        xml_string_copy_terminated(xml_node_name(child), (uint8_t *)buffer, sizeof(buffer));
+        if (strcmp(buffer, "key") == 0) {
+            xml_string_copy_terminated(xml_node_content(child), (uint8_t *)client->session_key_buffer, sizeof(client->session_key_buffer));
+            printf("Received session key: %s\n", client->session_key_buffer);
+            retcode = 0;
+            break;
+        }
+    }
+
+xml_cleanup:
+    xml_document_free(doc, false);
+    free(response.data);
+    return retcode;
 }
 
 const char *scrob_get_auth_url(scrob_client *client) {
