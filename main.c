@@ -103,7 +103,6 @@ int main(int argc, char **argv) {
     scrob_get_session_key(client); // This will print the response for debugging
 
 got_session_key:
-
     // Additional client operations would go here
 
     scrob_destroy_client(client);

@@ -9,7 +9,6 @@ set(CMAKE_C_EXTENSIONS OFF)
 find_package(CURL REQUIRED)
 
 add_library(libscrobbler
-	src/authentication.c
 	src/client.c
 	src/md5.c
 	src/scrob.c
