@@ -10,14 +10,19 @@ find_package(CURL REQUIRED)
 
 add_library(libscrobbler
 	src/client.c
+	src/api.c
+	src/auth.c
 	src/md5.c
 	src/scrob.c
+	src/scrobble.c
     src/xml.c
 )
 
 target_include_directories(libscrobbler
 	PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/include
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(libscrobbler

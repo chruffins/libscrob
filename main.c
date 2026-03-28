@@ -1,9 +1,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "scrob.h"
 #include "client.h"
+#include "auth.h"
+#include "scrobble.h"
 
 const char* read_api_key() {
     char *api_key = getenv("LASTFM_API_KEY");
@@ -104,6 +107,9 @@ int main(int argc, char **argv) {
 
 got_session_key:
     // Additional client operations would go here
+    time_t timestamp = time(NULL);
+
+    scrob_easy_scrobble(client, "Carissa's Wierd", "Sympathy Bush", (unsigned int)timestamp); // example scrobble for current time
 
     scrob_destroy_client(client);
     return 0;
