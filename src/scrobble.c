@@ -1,5 +1,15 @@
 #include "scrobble.h"
 #include "client.h"
+#include "client_internal.h"
+#include "api.h"
+#include "xml.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include <curl/curl.h>
 
 struct scrob_track {
     char *artist;
@@ -23,7 +33,83 @@ int scrob_scrobble_track(scrob_client *client, const scrob_track *track) {
 }
 
 int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *track_title, unsigned int utc_timestamp) {
+    if (client == NULL || artist == NULL || track_title == NULL || client->is_authenticated == false) {
+        return 1; // failure
+    }
 
+    char *params[7] = {"api_key", "artist0", "method", "sk", "timestamp0", "track0", "api_sig"};
+    char *values[7] = {client->api_key, artist, "track.scrobble", client->session_key_buffer, NULL, track_title, NULL};
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        return 1; // failure
+    }
+
+    char *timestamp_str = malloc(11); // enough for 10 digits + null terminator
+    if (!timestamp_str) {
+        curl_easy_cleanup(curl);
+        return 1; // failure
+    }
+
+    snprintf(timestamp_str, 11, "%u", utc_timestamp);
+    values[4] = timestamp_str;
+
+    const char* api_sig = scrob_create_api_signature((const char **)params, (const char **)values, 6, client->shared_secret); // need 2 free after POST
+    if (!api_sig) {
+        free(timestamp_str);
+        curl_easy_cleanup(curl);
+        return 1; // failure
+    }
+    values[6] = (char *)api_sig;
+
+    // ... rest of the function
+    const char* request_url = SCROB_API_ENDPOINT; // POST requests go to the endpoint directly
+    if (curl_easy_setopt(curl, CURLOPT_URL, request_url) != CURLE_OK) {
+        free(timestamp_str);
+        free((char*)api_sig);
+        curl_easy_cleanup(curl);
+        return 1; // failure
+    }
+    const char* postfields = scrob_build_postfields((const char **)params, (const char **)values, 7); // also needs free after POST
+    if (!postfields || curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields) != CURLE_OK) {
+        free(timestamp_str);
+        free((char*)api_sig);
+        if (postfields) free((char*)postfields);
+        curl_easy_cleanup(curl);
+        return 1; // failure
+    }
+
+    scrob_response_buffer response = {0};
+    struct xml_document *doc = NULL;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, scrob_write_response_body);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+    if (curl_easy_perform(curl) == CURLE_OK && response.data) {
+        printf("%s", response.data);
+    }
+
+    // *dont* need these resources anymore
+    free((char*)api_sig);
+    free((char*)postfields);
+    curl_easy_cleanup(curl);
+
+    doc = xml_parse_document((uint8_t*)response.data, response.length);
+    if (!doc) {
+        fprintf(stderr, "Failed to parse XML response\n");
+        return 1; // failure
+    }
+
+    struct xml_node *root = xml_document_root(doc);
+    int error_code = scrob_get_error_code_from_response(root);
+    if (error_code) {
+        fprintf(stderr, "API error code: %d\n", error_code);
+        xml_document_free(doc, false);
+        free(response.data);
+        return error_code; // failure with API error code
+    } else {
+        printf("Scrobble request successful\n");
+    }
 }
 
 // scrob track struct
