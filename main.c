@@ -3,10 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "scrob.h"
-#include "client.h"
-#include "auth.h"
-#include "scrobble.h"
+#include "libscrobbler.h"
 
 const char* read_api_key() {
     char *api_key = getenv("LASTFM_API_KEY");

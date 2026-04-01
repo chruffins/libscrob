@@ -38,7 +38,7 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
     }
 
     char *params[7] = {"api_key", "artist0", "method", "sk", "timestamp0", "track0", "api_sig"};
-    char *values[7] = {client->api_key, artist, "track.scrobble", client->session_key_buffer, NULL, track_title, NULL};
+    char *values[7] = {client->api_key, (char*)artist, "track.scrobble", client->session_key_buffer, NULL, (char*)track_title, NULL};
 
     CURL *curl = curl_easy_init();
     if (!curl) {

@@ -8,7 +8,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 find_package(CURL REQUIRED)
 
-add_library(libscrobbler
+add_library(scrobbler SHARED
 	src/client.c
 	src/api.c
 	src/auth.c
@@ -18,14 +18,14 @@ add_library(libscrobbler
     src/xml.c
 )
 
-target_include_directories(libscrobbler
+target_include_directories(scrobbler
 	PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(libscrobbler
+target_link_libraries(scrobbler
 	PUBLIC
 		CURL::libcurl
 )
@@ -36,5 +36,5 @@ add_executable(libscrobbler_harness
 
 target_link_libraries(libscrobbler_harness
 	PRIVATE
-		libscrobbler
+		scrobbler
 )
