@@ -1,5 +1,5 @@
-#ifndef SCROBCLIENT_H
-#define SCROBCLIENT_H
+#ifndef SCROB_CLIENT_H
+#define SCROB_CLIENT_H
 
 #define SCROB_API_ENDPOINT "https://ws.audioscrobbler.com/2.0/"
 
@@ -23,4 +23,4 @@ bool scrob_set_client_session_key(scrob_client* client, const char* session_key)
     }
 #endif
 
-#endif /* SCROBCLIENT_H */
+#endif /* SCROB_CLIENT_H */

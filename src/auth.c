@@ -13,7 +13,7 @@
 #include "api.h"
 
 static const char *scrob_create_api_signature_for_get_token(const char *api_key) {
-    char* hex_sig = (char *)malloc(33);
+    char* hex_sig = (char *)malloc(SCROB_MD5_DIGEST_HEX_SIZE);
     if (!hex_sig) {
         return NULL;
     }
@@ -25,15 +25,13 @@ static const char *scrob_create_api_signature_for_get_token(const char *api_key)
         return NULL;
     }
 
-    printf("string to hash: %s\n", buffer); // debug print
-
-    uint8_t binary_digest[16];
+    uint8_t binary_digest[SCROB_MD5_DIGEST_BINARY_SIZE];
     scrob_md5_ctx ctx;
     scrob_md5_init(&ctx);
     scrob_md5_update(&ctx, (const uint8_t *)buffer, len);
     scrob_md5_final(binary_digest, &ctx);
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < SCROB_MD5_DIGEST_BINARY_SIZE; i++) {
         snprintf(&hex_sig[i * 2], 3, "%02x", binary_digest[i]);
     }
 
@@ -51,7 +49,7 @@ int scrob_get_client_token(scrob_client* client) {
         return retcode;
     }
 
-    char buffer[512] = {0};
+    char buffer[SCROB_BUFFER_SIZE] = {0};
     const char *api_sig = scrob_create_api_signature_for_get_token(client->api_key); // print as hex
     const char *param_names[3] = {"method", "api_key", "api_sig"};
     const char *param_values[3] = {"auth.getToken", client->api_key, api_sig};
@@ -137,7 +135,7 @@ int scrob_get_session_key(scrob_client *client) {
         return retcode;
     }
 
-    char buffer[512] = {0};
+    char buffer[SCROB_BUFFER_SIZE] = {0};
     const char *param_names[4] = {"method", "api_key", "token", "api_sig"};
     const char *param_values[4] = {"auth.getSession", client->api_key, client->token_buffer, NULL};
     const char *api_sig = scrob_create_api_signature(param_names, param_values, 3, client->shared_secret); // needs to be free'd
@@ -157,8 +155,6 @@ int scrob_get_session_key(scrob_client *client) {
         return retcode;
     }
 
-    printf("Requesting session key with URL: %s\n", request_url); // debug print
-
     scrob_response_buffer response = {0};
     struct xml_document *doc = NULL;
 
@@ -177,6 +173,7 @@ int scrob_get_session_key(scrob_client *client) {
     doc = xml_parse_document((uint8_t *)response.data, response.length);
     if (!doc) {
         fprintf(stderr, "Failed to parse XML response\n");
+        free(response.data);
         return retcode;
     }
 

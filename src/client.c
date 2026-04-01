@@ -29,7 +29,7 @@ void scrob_destroy_client(scrob_client* client) {
 }
 
 bool scrob_set_client_api_key(scrob_client *client, const char *api_key) {
-    if (!client || !api_key || strlen(api_key) != 32) {
+    if (!client || !api_key || strlen(api_key) != SCROB_API_KEY_LENGTH) {
         return false;
     }
     strncpy(client->api_key, api_key, sizeof(client->api_key) - 1);
@@ -38,7 +38,7 @@ bool scrob_set_client_api_key(scrob_client *client, const char *api_key) {
 }
 
 bool scrob_set_client_shared_secret(scrob_client *client, const char *shared_secret) {
-    if (!client || !shared_secret || strlen(shared_secret) != 32) {
+    if (!client || !shared_secret || strlen(shared_secret) != SCROB_API_KEY_LENGTH) {
         return false;
     }
     strncpy(client->shared_secret, shared_secret, sizeof(client->shared_secret) - 1);
@@ -47,7 +47,7 @@ bool scrob_set_client_shared_secret(scrob_client *client, const char *shared_sec
 }
 
 bool scrob_set_client_session_key(scrob_client *client, const char *session_key) {
-    if (!client || !session_key || strlen(session_key) != 32) {
+    if (!client || !session_key || strlen(session_key) != SCROB_API_KEY_LENGTH) {
         return false;
     }
     strncpy(client->session_key_buffer, session_key, sizeof(client->session_key_buffer) - 1);

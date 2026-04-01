@@ -7,6 +7,7 @@
 
 #include "md5.h"
 #include "xml.h"
+#include "client_internal.h"
 
 typedef struct {
     const char *name;
@@ -131,6 +132,10 @@ const char *scrob_build_postfields(
 }
 
 size_t scrob_write_response_body(void *contents, size_t size, size_t nmemb, void *userp) {
+    if (!userp) {
+        return 0;
+    }
+
     size_t total_size = size * nmemb;
     scrob_response_buffer *buffer = (scrob_response_buffer *)userp;
 
@@ -218,7 +223,7 @@ char *scrob_create_api_signature(
         return NULL;
     }
 
-    char *api_sig = (char *)malloc(33);
+    char *api_sig = (char *)malloc(SCROB_MD5_DIGEST_HEX_SIZE);
     if (!api_sig) {
         return NULL;
     }
@@ -267,15 +272,13 @@ char *scrob_create_api_signature(
     offset += secret_len;
     buffer[offset] = '\0';
 
-    printf("string to hash: %s\n", buffer); // debug print
-
-    uint8_t binary_digest[16];
+    uint8_t binary_digest[SCROB_MD5_DIGEST_BINARY_SIZE];
     scrob_md5_ctx ctx;
     scrob_md5_init(&ctx);
     scrob_md5_update(&ctx, (const uint8_t *)buffer, offset);
     scrob_md5_final(binary_digest, &ctx);
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < SCROB_MD5_DIGEST_BINARY_SIZE; i++) {
         snprintf(&api_sig[i * 2], 3, "%02x", binary_digest[i]);
     }
 

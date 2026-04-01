@@ -18,15 +18,6 @@ struct scrob_track {
     unsigned int timestamp;
 };
 
-static char* strdup(const char *s) {
-    size_t len = strlen(s) + 1;
-    char *copy = malloc(len);
-    if (copy) {
-        memcpy(copy, s, len);
-    }
-    return copy;
-}
-
 // interface with scrobble API
 int scrob_scrobble_track(scrob_client *client, const scrob_track *track) {
 
@@ -92,11 +83,13 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
     // *dont* need these resources anymore
     free((char*)api_sig);
     free((char*)postfields);
+    free(timestamp_str);
     curl_easy_cleanup(curl);
 
     doc = xml_parse_document((uint8_t*)response.data, response.length);
     if (!doc) {
         fprintf(stderr, "Failed to parse XML response\n");
+        free(response.data);
         return 1; // failure
     }
 
@@ -107,9 +100,11 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
         xml_document_free(doc, false);
         free(response.data);
         return error_code; // failure with API error code
-    } else {
-        printf("Scrobble request successful\n");
     }
+
+    xml_document_free(doc, false);
+    free(response.data);
+    return 0; // success
 }
 
 // scrob track struct

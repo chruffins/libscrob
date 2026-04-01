@@ -10,6 +10,7 @@ typedef struct {
 
 struct xml_node;
 
+// must be freed by caller
 const char *scrob_build_request_url(
     const char *endpoint,
     const char **param_names,
@@ -17,6 +18,7 @@ const char *scrob_build_request_url(
     size_t param_count
 );
 
+// must be freed by caller
 const char *scrob_build_postfields(
     const char **param_names,
     const char **param_values,
@@ -27,6 +29,7 @@ size_t scrob_write_response_body(void *contents, size_t size, size_t nmemb, void
 
 int scrob_get_error_code_from_response(struct xml_node *root);
 
+// must be freed by caller
 char *scrob_create_api_signature(
     const char **param_names,
     const char **param_values,
