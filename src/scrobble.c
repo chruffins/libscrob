@@ -18,6 +18,20 @@ struct scrob_track {
     unsigned int timestamp;
 };
 
+static char* scrob_strdup(const char *s) {
+    if (!s) {
+        return NULL;
+    }
+    size_t len = strlen(s);
+    char *copy = (char *)malloc(len + 1);
+    if (!copy) {
+        return NULL;
+    }
+    memcpy(copy, s, len);
+    copy[len] = '\0';
+    return copy;
+};
+
 // interface with scrobble API
 int scrob_scrobble_track(scrob_client *client, const scrob_track *track) {
 
@@ -113,15 +127,15 @@ scrob_track* scrob_create_track(const char *artist, const char *track_title, uns
     if (!track) {
         return NULL;
     }
-    track->artist = strdup(artist);
-    track->title = strdup(track_title);
+    track->artist = scrob_strdup(artist);
+    track->title = scrob_strdup(track_title);
     track->album = NULL;
     track->timestamp = utc_timestamp;
     return track;
 }
 
 bool scrob_set_track_album(scrob_track *track, const char *album) {
-    char *copy = strdup(album);
+    char *copy = scrob_strdup(album);
     if (!copy) {
         return false;
     }
@@ -132,7 +146,7 @@ bool scrob_set_track_album(scrob_track *track, const char *album) {
 }
 
 bool scrob_set_track_artist(scrob_track *track, const char *artist) {
-    char *copy = strdup(artist);
+    char *copy = scrob_strdup(artist);
     if (!copy) {
         return false;
     }
@@ -142,7 +156,7 @@ bool scrob_set_track_artist(scrob_track *track, const char *artist) {
 }
 
 bool scrob_set_track_title(scrob_track *track, const char *title) {
-    char *copy = strdup(title);
+    char *copy = scrob_strdup(title);
     if (!copy) {
         return false;
     }
