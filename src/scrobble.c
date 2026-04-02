@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <curl/curl.h>
-
 struct scrob_track {
     char *artist;
     char *title;
@@ -49,14 +47,8 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
     char *params[7] = {"api_key", "artist0", "method", "sk", "timestamp0", "track0", "api_sig"};
     char *values[7] = {client->api_key, (char*)artist, "track.scrobble", client->session_key_buffer, NULL, (char*)track_title, NULL};
 
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        return 1; // failure
-    }
-
     char *timestamp_str = malloc(11); // enough for 10 digits + null terminator
     if (!timestamp_str) {
-        curl_easy_cleanup(curl);
         return 1; // failure
     }
 
@@ -66,35 +58,22 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
     const char* api_sig = scrob_create_api_signature((const char **)params, (const char **)values, 6, client->shared_secret); // need 2 free after POST
     if (!api_sig) {
         free(timestamp_str);
-        curl_easy_cleanup(curl);
         return 1; // failure
     }
     values[6] = (char *)api_sig;
 
-    // ... rest of the function
-    const char* request_url = SCROB_API_ENDPOINT; // POST requests go to the endpoint directly
-    if (curl_easy_setopt(curl, CURLOPT_URL, request_url) != CURLE_OK) {
-        free(timestamp_str);
-        free((char*)api_sig);
-        curl_easy_cleanup(curl);
-        return 1; // failure
-    }
     const char* postfields = scrob_build_postfields((const char **)params, (const char **)values, 7); // also needs free after POST
-    if (!postfields || curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields) != CURLE_OK) {
+    if (!postfields) {
         free(timestamp_str);
         free((char*)api_sig);
-        if (postfields) free((char*)postfields);
-        curl_easy_cleanup(curl);
+        free((char*)postfields);
         return 1; // failure
     }
 
     scrob_response_buffer response = {0};
     struct xml_document *doc = NULL;
 
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, scrob_write_response_body);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-
-    if (curl_easy_perform(curl) == CURLE_OK && response.data) {
+    if (scrob_perform_request(SCROB_API_ENDPOINT, postfields, &response) == 0 && response.data) {
         printf("%s", response.data);
     }
 
@@ -102,7 +81,6 @@ int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *tr
     free((char*)api_sig);
     free((char*)postfields);
     free(timestamp_str);
-    curl_easy_cleanup(curl);
 
     doc = xml_parse_document((uint8_t*)response.data, response.length);
     if (!doc) {

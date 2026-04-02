@@ -3,78 +3,44 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-
-#include <curl/curl.h>
+#include <stdio.h>
 
 #include "client.h"
 #include "client_internal.h"
-#include "md5.h"
 #include "xml.h"
 #include "api.h"
 
-static const char *scrob_create_api_signature_for_get_token(const char *api_key) {
-    char* hex_sig = (char *)malloc(SCROB_MD5_DIGEST_HEX_SIZE);
-    if (!hex_sig) {
-        return NULL;
-    }
-
-    char buffer[64] = {0};
-    int len = snprintf(buffer, sizeof(buffer), "api_key%s", api_key);
-    if (len < 0 || (size_t)len >= sizeof(buffer)) {
-        free(hex_sig);
-        return NULL;
-    }
-
-    uint8_t binary_digest[SCROB_MD5_DIGEST_BINARY_SIZE];
-    scrob_md5_ctx ctx;
-    scrob_md5_init(&ctx);
-    scrob_md5_update(&ctx, (const uint8_t *)buffer, len);
-    scrob_md5_final(binary_digest, &ctx);
-
-    for (int i = 0; i < SCROB_MD5_DIGEST_BINARY_SIZE; i++) {
-        snprintf(&hex_sig[i * 2], 3, "%02x", binary_digest[i]);
-    }
-
-    return hex_sig;
-}
-
 int scrob_get_client_token(scrob_client* client) {
-    int retcode = 1; // default to failure
-    if (strlen(client->api_key) == 0) {
+    int retcode = 1;
+    if (!client) {
         return retcode;
     }
 
-    CURL *curl = curl_easy_init();
-    if (!curl) {
+    if (strlen(client->api_key) == 0 || strlen(client->shared_secret) == 0) {
         return retcode;
     }
 
     char buffer[SCROB_BUFFER_SIZE] = {0};
-    const char *api_sig = scrob_create_api_signature_for_get_token(client->api_key); // print as hex
+    const char *sig_param_names[2] = {"api_key", "method"};
+    const char *sig_param_values[2] = {client->api_key, "auth.getToken"};
+    const char *api_sig = scrob_create_api_signature(sig_param_names, sig_param_values, 2, client->shared_secret);
     const char *param_names[3] = {"method", "api_key", "api_sig"};
     const char *param_values[3] = {"auth.getToken", client->api_key, api_sig};
-    
 
     if (!api_sig) {
-        curl_easy_cleanup(curl);
         return retcode;
     }
 
     const char* request_url = scrob_build_request_url(SCROB_API_ENDPOINT, param_names, param_values, 3);
-    if (!request_url || curl_easy_setopt(curl, CURLOPT_URL, request_url) != CURLE_OK) {
-        free((char*)request_url);
+    if (!request_url) {
         free((char*)api_sig);
-        curl_easy_cleanup(curl);
         return retcode;
     }
 
     scrob_response_buffer response = {0};
     struct xml_document *doc = NULL;
 
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, scrob_write_response_body);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-
-    if (curl_easy_perform(curl) == CURLE_OK && response.data) {
+    if (scrob_perform_request(request_url, NULL, &response) == 0 && response.data) {
         printf("%s", response.data);
     }
 
@@ -87,12 +53,8 @@ int scrob_get_client_token(scrob_client* client) {
             retcode = error_code;
             xml_document_free(doc, false);
             goto cleanup;
-        } else {
-            printf("Token request successful\n");
         }
 
-        // actually grab the token now
-        // we expect the response to look like <lfm status="ok"><token>...</token></lfm>
         struct xml_node *token_node = xml_node_child(root, 0);
         if (!token_node) {
             fprintf(stderr, "Unexpected response format: no child nodes\n");
@@ -105,10 +67,10 @@ int scrob_get_client_token(scrob_client* client) {
             fprintf(stderr, "Unexpected response format: expected 'token' node, got '%s'\n", buffer);
             xml_document_free(doc, false);
             goto cleanup;
-        } else {
-            xml_string_copy_terminated(xml_node_content(token_node), (uint8_t*)client->token_buffer, sizeof(client->token_buffer));
-            printf("Received token: %s\n", client->token_buffer);
         }
+
+        xml_string_copy_terminated(xml_node_content(token_node), (uint8_t*)client->token_buffer, sizeof(client->token_buffer));
+        printf("Received token: %s\n", client->token_buffer);
 
         xml_document_free(doc, false);
         retcode = 0;
@@ -120,55 +82,44 @@ cleanup:
     free((char*)request_url);
     free((char*)api_sig);
     free(response.data);
-    curl_easy_cleanup(curl); // yea
     return retcode;
 }
 
 int scrob_get_session_key(scrob_client *client) {
-    int retcode = 1; // default to failure
-    if (strlen(client->api_key) == 0 || strlen(client->token_buffer) == 0) {
-         return retcode;
+    int retcode = 1;
+    if (!client) {
+        return retcode;
     }
 
-    CURL *curl = curl_easy_init();
-    if (!curl) {
+    if (strlen(client->api_key) == 0 || strlen(client->token_buffer) == 0 || strlen(client->shared_secret) == 0) {
         return retcode;
     }
 
     char buffer[SCROB_BUFFER_SIZE] = {0};
     const char *param_names[4] = {"method", "api_key", "token", "api_sig"};
     const char *param_values[4] = {"auth.getSession", client->api_key, client->token_buffer, NULL};
-    const char *api_sig = scrob_create_api_signature(param_names, param_values, 3, client->shared_secret); // needs to be free'd
+    const char *api_sig = scrob_create_api_signature(param_names, param_values, 3, client->shared_secret);
 
     if (!api_sig) {
-        curl_easy_cleanup(curl);
         return retcode;
     }
 
     param_values[3] = api_sig;
-    const char *request_url = scrob_build_request_url(SCROB_API_ENDPOINT, param_names, param_values, 4); // also needs free'd
-
-    if (!request_url || curl_easy_setopt(curl, CURLOPT_URL, request_url) != CURLE_OK) {
+    const char *request_url = scrob_build_request_url(SCROB_API_ENDPOINT, param_names, param_values, 4);
+    if (!request_url) {
         free((char*)api_sig);
-        free((char*)request_url);
-        curl_easy_cleanup(curl);
         return retcode;
     }
 
     scrob_response_buffer response = {0};
     struct xml_document *doc = NULL;
 
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, scrob_write_response_body);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-
-    if (curl_easy_perform(curl) == CURLE_OK && response.data) {
+    if (scrob_perform_request(request_url, NULL, &response) == 0 && response.data) {
         printf("%s", response.data);
     }
 
-    // *dont* need these resources anymore
     free((char*)api_sig);
     free((char*)request_url);
-    curl_easy_cleanup(curl);
 
     doc = xml_parse_document((uint8_t *)response.data, response.length);
     if (!doc) {
@@ -183,25 +134,20 @@ int scrob_get_session_key(scrob_client *client) {
         fprintf(stderr, "API error code: %d\n", error_code);
         retcode = error_code;
         goto xml_cleanup;
-    } else {
-        printf("Session key request successful\n");
     }
 
-    // root should only have one child: session
     struct xml_node *session_node = xml_node_child(root, 0);
     if (!session_node) {
         fprintf(stderr, "Unexpected response format: no child nodes\n");
         goto xml_cleanup;
     }
 
-    // validate name
     xml_string_copy_terminated(xml_node_name(session_node), (uint8_t *)buffer, sizeof(buffer));
     if (strcmp(buffer, "session") != 0) {
         fprintf(stderr, "Unexpected response format: expected 'session' node, got '%s'\n", buffer);
         goto xml_cleanup;
     }
 
-    // session node should have two children: name and key
     int session_child_count = xml_node_children(session_node);
     for (int i = 0; i < session_child_count; i++) {
         struct xml_node *child = xml_node_child(session_node, i);
@@ -225,7 +171,7 @@ xml_cleanup:
 const char *scrob_get_auth_url(scrob_client *client) {
     size_t token_len = strlen(client->token_buffer);
     size_t api_key_len = strlen(client->api_key);
-    size_t predicted_len = 46 + api_key_len + token_len + 1; // +1 for null terminator
+    size_t predicted_len = 46 + api_key_len + token_len + 1;
 
     if (token_len == 0 || api_key_len == 0) {
         printf("Cannot generate auth URL: missing API key or token\n");
@@ -233,10 +179,15 @@ const char *scrob_get_auth_url(scrob_client *client) {
     }
 
     char* auth_url = malloc(predicted_len * sizeof(char));
+    if (!auth_url) {
+        return NULL;
+    }
+
     int len = snprintf(auth_url, predicted_len, "https://www.last.fm/api/auth/?api_key=%s&token=%s", client->api_key, client->token_buffer);
     if (len < 0 || (size_t)len >= predicted_len) {
         free(auth_url);
         return NULL;
     }
+
     return auth_url;
 }

@@ -29,6 +29,9 @@ size_t scrob_write_response_body(void *contents, size_t size, size_t nmemb, void
 
 int scrob_get_error_code_from_response(struct xml_node *root);
 
+// executes GET when postfields is NULL, otherwise executes POST
+int scrob_perform_request(const char *url, const char *postfields, scrob_response_buffer *response);
+
 // must be freed by caller
 char *scrob_create_api_signature(
     const char **param_names,

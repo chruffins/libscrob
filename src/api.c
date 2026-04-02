@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include <curl/curl.h>
+
 #include "md5.h"
 #include "xml.h"
 #include "client_internal.h"
@@ -187,6 +189,38 @@ int scrob_get_error_code_from_response(struct xml_node *root) {
     }
 
     return 0;
+}
+
+int scrob_perform_request(const char *url, const char *postfields, scrob_response_buffer *response) {
+    if (!url || !response) {
+        return 1;
+    }
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        return 1;
+    }
+
+    if (curl_easy_setopt(curl, CURLOPT_URL, url) != CURLE_OK) {
+        curl_easy_cleanup(curl);
+        return 1;
+    }
+
+    if (postfields && curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields) != CURLE_OK) {
+        curl_easy_cleanup(curl);
+        return 1;
+    }
+
+    if (curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, scrob_write_response_body) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, response) != CURLE_OK) {
+        curl_easy_cleanup(curl);
+        return 1;
+    }
+
+    CURLcode result = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    return result == CURLE_OK ? 0 : 1;
 }
 
 char *scrob_create_api_signature(
