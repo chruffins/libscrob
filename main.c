@@ -95,6 +95,7 @@ int main(int argc, char **argv) {
     #endif
     printf("After authenticating, press Enter to continue...\n");
     wait_for_enter();
+    free((char*)auth_url);
     } else {
         fprintf(stderr, "Failed to get authentication URL\n");
     }

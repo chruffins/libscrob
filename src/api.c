@@ -20,6 +20,73 @@ static int scrob_compare_param_pairs(const void *a, const void *b) {
     return strcmp(pair_a->name, pair_b->name);
 }
 
+static char *scrob_build_param_string(
+    const char *endpoint,
+    const char **param_names,
+    const char **param_values,
+    size_t param_count,
+    char prefix
+) {
+    size_t endpoint_len = endpoint ? strlen(endpoint) : 0;
+    size_t total_len = endpoint_len;
+
+    if (param_count > 0) {
+        if (!param_names || !param_values) {
+            return NULL;
+        }
+
+        if (prefix != '\0') {
+            total_len += 1;
+        }
+    }
+
+    for (size_t i = 0; i < param_count; ++i) {
+        const char *name = param_names[i];
+        const char *value = param_values[i];
+        if (!name || !value) {
+            return NULL;
+        }
+
+        total_len += strlen(name) + 1 + strlen(value);
+        if (i + 1 < param_count) {
+            total_len += 1;
+        }
+    }
+
+    char *result = (char *)malloc(total_len + 1);
+    if (!result) {
+        return NULL;
+    }
+
+    char *cursor = result;
+    if (endpoint_len > 0) {
+        memcpy(cursor, endpoint, endpoint_len);
+        cursor += endpoint_len;
+    }
+
+    if (param_count > 0 && prefix != '\0') {
+        *cursor++ = prefix;
+    }
+
+    for (size_t i = 0; i < param_count; ++i) {
+        size_t name_len = strlen(param_names[i]);
+        size_t value_len = strlen(param_values[i]);
+
+        memcpy(cursor, param_names[i], name_len);
+        cursor += name_len;
+        *cursor++ = '=';
+        memcpy(cursor, param_values[i], value_len);
+        cursor += value_len;
+
+        if (i + 1 < param_count) {
+            *cursor++ = '&';
+        }
+    }
+
+    *cursor = '\0';
+    return result;
+}
+
 const char *scrob_build_request_url(
     const char *endpoint,
     const char **param_names,
@@ -29,60 +96,7 @@ const char *scrob_build_request_url(
     if (!endpoint) {
         return NULL;
     }
-
-    size_t endpoint_len = strlen(endpoint);
-    size_t total_len = endpoint_len;
-
-    if (param_count > 0) {
-        if (!param_names || !param_values) {
-            return NULL;
-        }
-        total_len += 1; // '?'
-    }
-
-    for (size_t i = 0; i < param_count; ++i) {
-        const char *name = param_names[i];
-        const char *value = param_values[i];
-        if (!name || !value) {
-            return NULL;
-        }
-
-        total_len += strlen(name) + 1 + strlen(value); // name + '=' + value
-        if (i + 1 < param_count) {
-            total_len += 1; // '&'
-        }
-    }
-
-    char *url = (char *)malloc(total_len + 1);
-    if (!url) {
-        return NULL;
-    }
-
-    char *cursor = url;
-    memcpy(cursor, endpoint, endpoint_len);
-    cursor += endpoint_len;
-
-    if (param_count > 0) {
-        *cursor++ = '?';
-    }
-
-    for (size_t i = 0; i < param_count; ++i) {
-        size_t name_len = strlen(param_names[i]);
-        size_t value_len = strlen(param_values[i]);
-
-        memcpy(cursor, param_names[i], name_len);
-        cursor += name_len;
-        *cursor++ = '=';
-        memcpy(cursor, param_values[i], value_len);
-        cursor += value_len;
-
-        if (i + 1 < param_count) {
-            *cursor++ = '&';
-        }
-    }
-
-    *cursor = '\0';
-    return url;
+    return scrob_build_param_string(endpoint, param_names, param_values, param_count, '?');
 }
 
 const char *scrob_build_postfields(
@@ -90,45 +104,7 @@ const char *scrob_build_postfields(
     const char **param_values,
     size_t param_count
 ) {
-    size_t total_len = 0;
-
-    for (size_t i = 0; i < param_count; ++i) {
-        const char *name = param_names[i];
-        const char *value = param_values[i];
-        if (!name || !value) {
-            return NULL;
-        }
-
-        total_len += strlen(name) + 1 + strlen(value); // name + '=' + value
-        if (i + 1 < param_count) {
-            total_len += 1; // '&'
-        }
-    }
-
-    char *url = (char *)malloc(total_len + 1);
-    if (!url) {
-        return NULL;
-    }
-
-    char *cursor = url;
-    
-    for (size_t i = 0; i < param_count; ++i) {
-        size_t name_len = strlen(param_names[i]);
-        size_t value_len = strlen(param_values[i]);
-
-        memcpy(cursor, param_names[i], name_len);
-        cursor += name_len;
-        *cursor++ = '=';
-        memcpy(cursor, param_values[i], value_len);
-        cursor += value_len;
-
-        if (i + 1 < param_count) {
-            *cursor++ = '&';
-        }
-    }
-
-    *cursor = '\0';
-    return url;
+    return scrob_build_param_string(NULL, param_names, param_values, param_count, '\0');
 }
 
 size_t scrob_write_response_body(void *contents, size_t size, size_t nmemb, void *userp) {

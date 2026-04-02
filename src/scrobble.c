@@ -34,7 +34,11 @@ static char* scrob_strdup(const char *s) {
 
 // interface with scrobble API
 int scrob_scrobble_track(scrob_client *client, const scrob_track *track) {
+    if (!track) {
+        return 1;
+    }
 
+    return scrob_easy_scrobble(client, track->artist, track->title, track->timestamp);
 }
 
 int scrob_easy_scrobble(scrob_client *client, const char *artist, const char *track_title, unsigned int utc_timestamp) {
